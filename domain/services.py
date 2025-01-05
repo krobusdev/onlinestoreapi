@@ -1,10 +1,15 @@
-from .models import Game, GameModel, GameUpdate
-from fastapi import HTTPException
 
-def get_games(db):  # В скобках - создаем сессию
-    games = db.query(GameModel).all()  # Создаем запрос с помощью SQLAlchemy
+from fastapi import HTTPException
+from domain import responseModels
+from domain import requestModels
+from domain import gameModel
+
+
+
+def get_games(db):
+    games = db.query(gameModel.GameModel).all()  # Создаем запрос с помощью SQLAlchemy
     return [
-        Game(
+        responseModels.ReturnOneGame(
             id=game.game_id,
             name=game.game_name,
             price=game.game_price,
@@ -13,10 +18,11 @@ def get_games(db):  # В скобках - создаем сессию
         for game in games
     ]
 
-def add_game(game_data: dict, db):  # В скобках - берем данные из JSON файла из запроса и засовываем в класс. Создаем сессию
-    game = Game(**game_data)
+def add_game(game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
-    new_game = GameModel(
+    game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
+
+    new_game = gameModel.GameModel(
         game_name=game.name,
         game_price=game.price,
         game_is_in_stock=game.is_in_stock
@@ -25,17 +31,21 @@ def add_game(game_data: dict, db):  # В скобках - берем данны�
     db.commit()
     db.refresh(new_game)
 
-    return Game(
+    return responseModels.AddOneGameResponse(
         id=new_game.game_id,
         name=new_game.game_name,
         price=new_game.game_price,
         is_in_stock=new_game.game_is_in_stock
     )
 
-def update_game(game_id: int, game_data: dict, db):  # Из JSON файла запроса засовываем то, что нужно в класс GameUpdate. Создаем сессию.
-    game = Game(**game_data)
+def update_game(game_id: int, game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
-    existing_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()  # .first это берем первое попавшееся совпадение. .filter это как WHERE в SQL.
+    try:
+        game = requestModels.UpdateOneGame(**game_data)  # запихиваем словарь в класс
+    except:
+        raise HTTPException(detail="Invalid request. JSON provides wrong request structure.")
+
+    existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()  # .first это берем первое попавшееся совпадение. .filter это как WHERE в SQL.
     if not existing_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
@@ -49,7 +59,7 @@ def update_game(game_id: int, game_data: dict, db):  # Из JSON файла за
     db.commit()
     db.refresh(existing_game)
 
-    return Game(
+    return responseModels.ReturnOneGame(
         id=existing_game.game_id,
         name=existing_game.game_name,
         price=existing_game.game_price,
@@ -57,7 +67,7 @@ def update_game(game_id: int, game_data: dict, db):  # Из JSON файла за
     )
 
 def delete_game(game_id: int, db):
-    existing_game = db.query(GameModel).filter(GameModel.game_id == game_id).first()
+    existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()
     if not existing_game:
         raise HTTPException(status_code=404, detail="Game not found")
 

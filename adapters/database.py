@@ -1,4 +1,5 @@
 from sqlalchemy.ext.declarative import declarative_base
+from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -11,5 +12,7 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except:
+        raise HTTPException(status_code= 500, detail= "Unable to connect to server.")
     finally:
         db.close()
