@@ -2,41 +2,31 @@
 from fastapi import HTTPException
 from domain import responseModels
 from domain import requestModels
+from pydantic import BaseModel
 from domain import gameModel
 
 
 
 def get_games(db):
     games = db.query(gameModel.GameModel).all()  # Создаем запрос с помощью SQLAlchemy
-    return [
-        responseModels.ReturnOneGame(
-            id=game.game_id,
-            name=game.game_name,
-            price=game.game_price,
-            is_in_stock=game.game_is_in_stock
-        )
-        for game in games
-    ]
+
+    return [responseModels.ReturnOneGame.model_validate(game) for game in games]
 
 def add_game(game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
-    game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
+    try:
+        game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
+    except:
+        raise HTTPException(detail="Invalid request. JSON provides wrong request structure.")
 
-    new_game = gameModel.GameModel(
-        game_name=game.name,
-        game_price=game.price,
-        game_is_in_stock=game.is_in_stock
-    )
+    game_data_dict = {key: value for key, value in game.model_dump().items() if not key.startswith('_')}
+    new_game = gameModel.GameModel(**game_data_dict)
+
     db.add(new_game)
     db.commit()
     db.refresh(new_game)
 
-    return responseModels.AddOneGameResponse(
-        id=new_game.game_id,
-        name=new_game.game_name,
-        price=new_game.game_price,
-        is_in_stock=new_game.game_is_in_stock
-    )
+    return responseModels.AddedOneGame.model_validate(new_game)
 
 def update_game(game_id: int, game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
@@ -49,22 +39,14 @@ def update_game(game_id: int, game_data: dict, db):  # В скобках - бе�
     if not existing_game:
         raise HTTPException(status_code=404, detail="Game not found")
 
-    if game.name is not None:  # Проверяем какие данные меняем
-        existing_game.game_name = game.name
-    if game.price is not None:
-        existing_game.game_price = game.price
-    if game.is_in_stock is not None:
-        existing_game.game_is_in_stock = game.is_in_stock
+    for key, value in game.model_dump().items():
+        if value is not None:
+            setattr(existing_game, key, value)
 
     db.commit()
     db.refresh(existing_game)
 
-    return responseModels.ReturnOneGame(
-        id=existing_game.game_id,
-        name=existing_game.game_name,
-        price=existing_game.game_price,
-        is_in_stock=existing_game.game_is_in_stock
-    )
+    return responseModels.ReturnOneGame.model_validate(existing_game)
 
 def delete_game(game_id: int, db):
     existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()

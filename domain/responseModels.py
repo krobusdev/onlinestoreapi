@@ -7,16 +7,20 @@ from typing import Optional
 
 
 class ReturnOneGame(BaseModel):
-    id: int
-    name: str
-    price: int
-    is_in_stock: bool
+    game_id: int
+    game_name: str
+    game_price: int
+    game_is_in_stock: bool
+
 
     class Config:
         from_attributes = True  # Чтобы парсить атрибуты напрямую из GameModel
 
-class AddOneGameResponse(BaseModel):
-    id: int
-    name: str
-    price: int
-    is_in_stock: bool
+class AddedOneGame(BaseModel):
+    game_id: int
+    game_name: str
+    game_price: int
+    game_is_in_stock: bool
+
+    class Config:
+        from_attributes = True  # Чтобы парсить атрибуты напрямую из GameModel
