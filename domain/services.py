@@ -14,11 +14,12 @@ def get_games(db):
 
 def add_game(game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
-    try:
-        game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
-    except:
-        raise HTTPException(detail="Invalid request. JSON provides wrong request structure.")
+    valid_keys = set(requestModels.AddOneGame.model_fields.keys())
 
+    if not set(game_data.keys()).issubset(valid_keys):
+        raise HTTPException(status_code=422, detail="Invalid request. JSON provides wrong request structure.")
+
+    game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
     game_data_dict = {key: value for key, value in game.model_dump().items() if not key.startswith('_')}
     new_game = gameModel.GameModel(**game_data_dict)
 
@@ -30,10 +31,12 @@ def add_game(game_data: dict, db):  # В скобках - берем данны�
 
 def update_game(game_id: int, game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
 
-    try:
-        game = requestModels.UpdateOneGame(**game_data)  # запихиваем словарь в класс
-    except:
-        raise HTTPException(detail="Invalid request. JSON provides wrong request structure.")
+    valid_keys = set(requestModels.UpdateOneGame.model_fields.keys())
+    if not set(game_data.keys()).issubset(valid_keys):
+        raise HTTPException(status_code=422, detail="Invalid request. JSON provides wrong request structure.")
+
+
+    game = requestModels.UpdateOneGame(**game_data)  # запихиваем словарь в класс
 
     existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()  # .first это берем первое попавшееся совпадение. .filter это как WHERE в SQL.
     if not existing_game:
