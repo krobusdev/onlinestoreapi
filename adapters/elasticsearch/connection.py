@@ -1,6 +1,6 @@
 from elasticsearch import Elasticsearch
-from database.models import GameModel
-from database.database import SessionLocal
+from adapters.database.models import GameModel
+from adapters.database.database import SessionLocal
 
 """
 Establishes and returns a connection to the Elasticsearch server.
@@ -16,25 +16,44 @@ except Exception as e:
     print(f"Error initializing database: {e}")
 
 
-index_name = "games"
+#index_name = "games"
 
-if not es.indices.exists(index=index_name):
-    es.indices.create(
-        index=index_name,
-        body={
-            "mappings": {
-                "properties": {
-                    "id": {"type": "integer"},
-                    "name": {"type": "text"},
-                    "price": {"type": "integer"},
-                    "is_in_stock": {"type": "boolean"}
-                }
-            }
-        }
-    )
-    print(f"Index '{index_name}' created.")
+#if not es.indices.exists(index=index_name):
+#    es.indices.create(
+#        index=index_name,
+#        body={
+#            "mappings": {
+#                "properties": {
+#                    "id": {"type": "integer"},
+#                    "name": {"type": "text"},
+#                    "price": {"type": "integer"},
+#                    "is_in_stock": {"type": "boolean"}
+#                }
+#            }
+#        }
+#    )
+#    print(f"Index '{index_name}' created.")
 
 def sync_data_to_elasticsearch():
+
+    index_name = "games"
+
+    if not es.indices.exists(index=index_name):
+        es.indices.create(
+            index=index_name,
+            body={
+                "mappings": {
+                    "properties": {
+                        "id": {"type": "integer"},
+                        "name": {"type": "text"},
+                        "price": {"type": "integer"},
+                        "is_in_stock": {"type": "boolean"}
+                    }
+                }
+            }
+        )
+        print(f"Index '{index_name}' created.")
+
     # Get data from PostgreSQL
     session = SessionLocal()
     games = session.query(GameModel).all()
