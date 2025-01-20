@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:15.3-alpine
+    container_name: postgres-db
+    restart: always
+    env_file:
+      - .env  # Подключение файла .env
+    ports:
+      - "${POSTGRES_PORT}:5432"  # Используем переменную из .env
+    networks:
+      - es_network  # This refers to the custom network defined below
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.6.0
+    container_name: elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+    ports:
+      - 9200:9200
+      - 9300:9300
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - es_network  # This refers to the custom network defined below
+    restart: always
+
+volumes:
+  postgres_data:
+    driver: local
+  elasticsearch-data:  # This defines the volume for persistent storage
+    driver: local
+
+networks:
+  es_network:
+    driver: bridge  # This defines the custom network

@@ -1,62 +1,121 @@
-
-from fastapi import HTTPException
-from domain import responseModels
-from domain import requestModels
-from pydantic import BaseModel
-from domain import gameModel
-
-
-
-def get_games(db):
-    games = db.query(gameModel.GameModel).all()  # Создаем запрос с помощью SQLAlchemy
-
-    return [responseModels.ReturnOneGame.model_validate(game) for game in games]
-
-def add_game(game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
-
-    valid_keys = set(requestModels.AddOneGame.model_fields.keys())
-
-    if not set(game_data.keys()).issubset(valid_keys):
-        raise HTTPException(status_code=422, detail="Invalid request. JSON provides wrong request structure.")
-
-    game = requestModels.AddOneGame(**game_data)  # запихиваем словарь в класс
-    game_data_dict = {key: value for key, value in game.model_dump().items() if not key.startswith('_')}
-    new_game = gameModel.GameModel(**game_data_dict)
-
-    db.add(new_game)
-    db.commit()
-    db.refresh(new_game)
-
-    return responseModels.AddedOneGame.model_validate(new_game)
-
-def update_game(game_id: int, game_data: dict, db):  # В скобках - берем данные из запроса и обозначаем что это словарь
-
-    valid_keys = set(requestModels.UpdateOneGame.model_fields.keys())
-    if not set(game_data.keys()).issubset(valid_keys):
-        raise HTTPException(status_code=422, detail="Invalid request. JSON provides wrong request structure.")
+from domain import schemas
+from adapters.database import models
+from sqlalchemy.orm import Session
+from adapters.database.database import get_db
+from adapters.elasticsearch.connection import get_es
+from fastapi import Depends
+from elasticsearch import Elasticsearch
+from elasticsearch.helpers import bulk
 
 
-    game = requestModels.UpdateOneGame(**game_data)  # запихиваем словарь в класс
+class GameNotFoundError(Exception):
+    """Исключение, выбрасываемое, если игра не найдена."""
 
-    existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()  # .first это берем первое попавшееся совпадение. .filter это как WHERE в SQL.
-    if not existing_game:
-        raise HTTPException(status_code=404, detail="Game not found")
+    pass
 
-    for key, value in game.model_dump().items():
-        if value is not None:
-            setattr(existing_game, key, value)
 
-    db.commit()
-    db.refresh(existing_game)
+class InvalidGameDataError(Exception):
+    """Исключение, выбрасываемое, если данные игры некорректны."""
 
-    return responseModels.ReturnOneGame.model_validate(existing_game)
+    pass
 
-def delete_game(game_id: int, db):
-    existing_game = db.query(gameModel.GameModel).filter(gameModel.GameModel.game_id == game_id).first()
-    if not existing_game:
-        raise HTTPException(status_code=404, detail="Game not found")
 
-    db.delete(existing_game)
-    db.commit()
+class GameService:
 
-    return {"message": f"Game with id {game_id} deleted successfully"}
+    def __init__(self, db_session, es_client):
+        self.db_session = db_session
+        self.es_client = es_client
+
+    def get_games(self):
+        """
+        Получить все игры.
+        """
+        games = self.db_session.query(models.GameModel).all()
+        return [schemas.GameReadSchema.model_validate(game) for game in games]
+
+    def get_game_by_id(self, game_id: int):
+        """
+        Получить игру по её ID.
+        """
+        game = (
+            self.db_session.query(models.GameModel)
+            .filter(models.GameModel.id == game_id)
+            .first()
+        )
+        if not game:
+            raise GameNotFoundError(f"Game with ID {game_id} not found")
+        return schemas.GameReadSchema.model_validate(game)
+
+    def add_game(self, game_data: schemas.GameCreateSchema):
+        """
+        Добавить новую игру.
+        """
+        try:
+            new_game = models.GameModel(**game_data.dict())
+            self.db_session.add(new_game)
+            self.db_session.commit()
+            self.db_session.refresh(new_game)
+            return schemas.GameReadSchema.model_validate(new_game)
+        except Exception as e:
+            self.db_session.rollback()
+            raise InvalidGameDataError(f"Invalid game data: {e}")
+
+    def update_game(self, game_id: int, game_data: schemas.GameUpdateSchema):
+        """
+        Обновить данные игры по её ID.
+        """
+        game = (
+            self.db_session.query(models.GameModel)
+            .filter(models.GameModel.id == game_id)
+            .first()
+        )
+        if not game:
+            raise GameNotFoundError(f"Game with ID {game_id} not found")
+
+        for key, value in game_data.dict(exclude_unset=True).items():
+            setattr(game, key, value)
+
+        self.db_session.commit()
+        self.db_session.refresh(game)
+        return schemas.GameReadSchema.model_validate(game)
+
+    def delete_game(self, game_id: int):
+        """
+        Удалить игру по её ID.
+        """
+        game = (
+            self.db_session.query(models.GameModel)
+            .filter(models.GameModel.id == game_id)
+            .first()
+        )
+        if not game:
+            raise GameNotFoundError(f"Game with ID {game_id} not found")
+
+        self.db_session.delete(game)
+        self.db_session.commit()
+
+    def search_games_by_name(self, query: str):
+        """
+        Поиск игр по имени.
+        """
+        body = {
+            "query": {
+                "wildcard": {
+                    "name": {
+                        "value": f"*{query.lower()}*",
+                        "boost": 1.0,
+                        "rewrite": "constant_score"
+                    }
+                }
+            }
+        }
+        response = self.es_client.search(index="games", body=body)
+        results = response["hits"]["hits"]
+        return [{"id": hit["_id"], **hit["_source"]} for hit in results]
+
+
+def get_game_service(
+        db: Session = Depends(get_db),
+        es_client: Elasticsearch = Depends(get_es)
+        ):
+    return GameService(db, es_client)
