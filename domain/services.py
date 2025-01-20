@@ -2,7 +2,7 @@ from domain import schemas
 from adapters.database import models
 from sqlalchemy.orm import Session
 from adapters.database.database import get_db
-from adapters.elasticsearch.connection import get_es
+from adapters.elasticsearch.connection import get_es, es
 from fastapi import Depends
 from elasticsearch import Elasticsearch
 from elasticsearch.helpers import bulk
@@ -55,6 +55,17 @@ class GameService:
             self.db_session.add(new_game)
             self.db_session.commit()
             self.db_session.refresh(new_game)
+
+            es.index(
+                index="games",  # Elasticsearch index name
+                id=new_game.id,      # The ID of the document in Elasticsearch
+                body={
+                    "name": new_game.name,
+                    "price": new_game.price,
+                    "is_in_stock": new_game.is_in_stock
+                }
+            )
+
             return schemas.GameReadSchema.model_validate(new_game)
         except Exception as e:
             self.db_session.rollback()
