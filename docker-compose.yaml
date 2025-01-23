@@ -8,7 +8,7 @@ services:
     ports:
       - "${POSTGRES_PORT}:5432"  # Используем переменную из .env
     networks:
-      - es_network  # This refers to the custom network defined below
+      - es_network
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
@@ -25,15 +25,15 @@ services:
     volumes:
       - elasticsearch-data:/usr/share/elasticsearch/data
     networks:
-      - es_network  # This refers to the custom network defined below
+      - es_network
     restart: always
 
 volumes:
   postgres_data:
     driver: local
-  elasticsearch-data:  # This defines the volume for persistent storage
+  elasticsearch-data:
     driver: local
 
 networks:
   es_network:
-    driver: bridge  # This defines the custom network
+    driver: bridge

@@ -13,7 +13,7 @@ class Settings:
             "true",
             "1",
             "yes",
-        )  # Значение по умолчанию
+        )  # Значения по умолчанию
 
 
 def get_settings():

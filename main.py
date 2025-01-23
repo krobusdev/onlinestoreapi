@@ -15,6 +15,7 @@ async def lifespan(app: FastAPI):
 
     # Инициализация базы данных перед стартом приложения
     init_db()
+    # Переносим данные с БД в Elasticsearch
     sync_data_to_elasticsearch()
     yield  # Запускаем приложение
 
