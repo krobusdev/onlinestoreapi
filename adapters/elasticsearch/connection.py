@@ -13,26 +13,8 @@ try:
         retry_on_timeout=True
     )
 except Exception as e:
-    print(f"Error initializing database: {e}")
+    print(f"Error initializing Elasticsearch: {e}")
 
-
-#index_name = "games"
-
-#if not es.indices.exists(index=index_name):
-#    es.indices.create(
-#        index=index_name,
-#        body={
-#            "mappings": {
-#                "properties": {
-#                    "id": {"type": "integer"},
-#                    "name": {"type": "text"},
-#                    "price": {"type": "integer"},
-#                    "is_in_stock": {"type": "boolean"}
-#                }
-#            }
-#        }
-#    )
-#    print(f"Index '{index_name}' created.")
 
 def sync_data_to_elasticsearch():
 
@@ -54,15 +36,16 @@ def sync_data_to_elasticsearch():
         )
         print(f"Index '{index_name}' created.")
 
-    # Get data from PostgreSQL
+    print("Synchronizing data to Elasticsearch...")
+    # Получаем данные из PostgreSQL
     session = SessionLocal()
     games = session.query(GameModel).all()
 
-    # Index data into Elasticsearch
+    # Записываем данные в Elasticsearch
     for game in games:
         es.index(
-            index="games",  # Elasticsearch index name
-            id=game.id,      # The ID of the document in Elasticsearch
+            index="games",
+            id=game.id,
             body={
                 "name": game.name,
                 "price": game.price,
@@ -71,7 +54,7 @@ def sync_data_to_elasticsearch():
         )
 
     session.close()
-    print("Data synchronized to Elasticsearch.")
+    print("Data synchronized.")
 
 
 def get_es():

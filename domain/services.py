@@ -33,6 +33,62 @@ class GameService:
         games = self.db_session.query(models.GameModel).all()
         return [schemas.GameReadSchema.model_validate(game) for game in games]
 
+    def search_games(
+    self,
+    name: str = None,
+    skip: int = 0,
+    limit: int = 10,
+    min_price: int = None,
+    max_price: int = None,
+    is_in_stock: bool = None
+    ):
+        """
+        Поиск игр c поддержкой фильтров и пагинации.
+        - name: поиск по имени
+        - skip: количество пропускаемых элементов
+        - limit: количество возвращаемых элементов
+        - min_price: минимальная цена
+        - max_price: максимальная цена
+        - is_in_stock: фильтрация по наличию
+        """
+        # Формируем базовый bool-запрос
+        must_queries = []
+        if name:
+            must_queries.append({
+                "wildcard": {
+                    "name": {
+                        "value": f"*{name.lower()}*",
+                        "boost": 1.0,
+                        "rewrite": "constant_score"
+                    }
+                }
+            })
+
+        # Опциональные фильтры
+        filters = []
+        if min_price is not None:
+            filters.append({"range": {"price": {"gte": min_price}}})
+        if max_price is not None:
+            filters.append({"range": {"price": {"lte": max_price}}})
+        if is_in_stock is not None:
+            filters.append({"term": {"is_in_stock": is_in_stock}})
+
+        # Финальный запрос
+        body = {
+            "from": skip,
+            "size": limit,
+            "query": {
+                "bool": {
+                    "must": must_queries,
+                    "filter": filters
+                }
+            }
+        }
+
+        response = self.es_client.search(index="games", body=body)
+        results = response["hits"]["hits"]
+        return [{"id": hit["_id"], **hit["_source"]} for hit in results]
+
     def get_game_by_id(self, game_id: int):
         """
         Получить игру по её ID.
@@ -51,14 +107,14 @@ class GameService:
         Добавить новую игру.
         """
         try:
-            new_game = models.GameModel(**game_data.dict())
+            new_game = models.GameModel(**game_data.dict())   # Добавляем игру в бд
             self.db_session.add(new_game)
             self.db_session.commit()
             self.db_session.refresh(new_game)
 
-            es.index(
-                index="games",  # Elasticsearch index name
-                id=new_game.id,      # The ID of the document in Elasticsearch
+            es.index(      # Добавляем игру в Elasticsearch
+                index="games",
+                id=new_game.id,
                 body={
                     "name": new_game.name,
                     "price": new_game.price,
@@ -86,7 +142,9 @@ class GameService:
         for key, value in game_data.dict(exclude_unset=True).items():
             setattr(game, key, value)
 
-        self.db_session.commit()
+        es.update(index="games", id=game_id, body={"doc": game_data.dict()})  # Обновляем игру в Elasticsearch
+
+        self.db_session.commit()   # Обновляем игру в бд
         self.db_session.refresh(game)
         return schemas.GameReadSchema.model_validate(game)
 
@@ -102,27 +160,10 @@ class GameService:
         if not game:
             raise GameNotFoundError(f"Game with ID {game_id} not found")
 
-        self.db_session.delete(game)
+        self.db_session.delete(game)   # Удаляем игру в бд
         self.db_session.commit()
 
-    def search_games_by_name(self, query: str):
-        """
-        Поиск игр по имени.
-        """
-        body = {
-            "query": {
-                "wildcard": {
-                    "name": {
-                        "value": f"*{query.lower()}*",
-                        "boost": 1.0,
-                        "rewrite": "constant_score"
-                    }
-                }
-            }
-        }
-        response = self.es_client.search(index="games", body=body)
-        results = response["hits"]["hits"]
-        return [{"id": hit["_id"], **hit["_source"]} for hit in results]
+        es.delete(index="games", id=game_id)   # Удаляем игру в Elasticsearch
 
 
 def get_game_service(
