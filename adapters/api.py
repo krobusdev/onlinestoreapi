@@ -12,7 +12,9 @@ router = APIRouter()
 
 
 @router.get("/games/", response_model=List[GameReadSchema])
-def read_games(service: GameService = Depends(get_game_service)):
+def read_games(
+    service: GameService = Depends(get_game_service)
+):
     """
     Получить все игры.
     """
@@ -53,7 +55,9 @@ def read_games(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/games/{id}", response_model=GameReadSchema)
-def read_game(id: int, service: GameService = Depends(get_game_service)):
+def read_game(
+    id: int, service: GameService = Depends(get_game_service)
+):
     """
     Получить игру по её ID.
     """
@@ -100,7 +104,9 @@ def update_game(
 
 
 @router.delete("/games/{id}")
-def delete_game(id: int, service: GameService = Depends(get_game_service)):
+def delete_game(
+    id: int, service: GameService = Depends(get_game_service)
+):
     """
     Удалить игру по её ID.
     """

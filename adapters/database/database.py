@@ -1,7 +1,7 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from settings import get_settings
-from adapters.database.models import Base  # Убедитесь, что Base импортируется из вашей модели
+from adapters.database.models import Base
 
 
 settings = next(get_settings())  # Получаем настройки
